@@ -47,13 +47,7 @@ install_github("TanjaZahn/UQforecasts")
 library(UQforecasts)
 ```
 
-!!! For now (remove later)!!!:
 
-``` r
-
-library(devtools)
-load_all('C:/Users/tazahn/Nextcloud/Research_Projects/Confidence_Bands_Skill_Scores/R_skill_scores_uncertainty/UQforecasts')
-```
 
 ## Example 1
 
