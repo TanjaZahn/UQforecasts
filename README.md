@@ -1,0 +1,301 @@
+
+# R package UQforecasts
+
+## Overview
+
+This package accompanies the paper “Uncertainty Quantification in
+Forecast Comparisons” by Marc-Oliver Pohle, Tanja Zahn and Sebastian
+Lerch.
+
+The goal of the package is to provide *valid simultaneous inference in
+forecast comparisons* in a multi-dimensional setup while preventing
+multi-comparison problems. It can be used to estimate measures such as
+skill scores, relative accuracy, the expected scores themselves and the
+difference in expected scores. The latter is the primary object of
+interest in the popular Diebold-Mariano tests of equal predictive
+accuracy. In addition, the package will generate confidence bands of
+level $1 - \alpha$ that are simultaneous over all dimensions, e.g., over
+forecasting methods, forecast horizons, variables and/or locations (in
+the case of meteorological forecasts).
+
+The main function of the package is called `conf_bands`. This function
+estimates the measure of interest and generates simultaneous confidence
+bands of level $1-\alpha$. Since the output is a nested list, we also
+provide a function called `list_to_df` that transforms the output to a
+data frame.
+
+For convenience, we also added some customary plotting functions:
+
+- `plot_horizontal`: Plot the measure and the confidence bands
+  horizontally, e.g., across forecast horizons, and potentially facet by
+  another variable.
+- `plot_vertical`: Plot the measure and the confidence bands vertically,
+  e.g., across different variables when there is only one forecast
+  horizon.
+  <!-- * `plot_map`: Create a map, e.g., across different locations. -->
+  <!-- * `plot_map_seq`: Create a map with a sequential color scheme. -->
+
+## Installation
+
+To install the package from Github and load it, run the following `R`
+code:
+
+``` r
+install.packages("devtools")
+library(devtools)
+install_github("TanjaZahn/UQforecasts")
+library(UQforecasts)
+```
+
+!!! For now (remove later)!!!:
+
+``` r
+
+library(devtools)
+load_all('C:/Users/tazahn/Nextcloud/Research_Projects/Confidence_Bands_Skill_Scores/R_skill_scores_uncertainty/UQforecasts')
+```
+
+## Example 1
+
+### Creating toy data
+
+Before we introduce the main function of the package, we will create
+some toy data that is also attached to this package. We create some
+artificial scores, e.g., the squared errors or the CRPS, of two
+forecasting methods ($M = 2$) for an evaluation sample of size
+$N = 100$. We consider $H = 4$ forecast horizons and $V = 3$ variables.
+For this toy example, we just draw the scores for each $t = 1,..,N$ as
+absolute values from a normal distribution. We set the mean of the
+scores for the first method equal to $v +h$, where $v = 1,...,3$ and
+$h=1,...,4$. Thus, the method has the highest mean, i.e. performs worst
+on average, for the third variable and the fourth forecast horizon. For
+the second method, we set the mean equal to $2+h$, that is, the mean of
+the scores still increase with the forecast horizon. Compared to method
+1, method 2 performs better for variable 1 and worse for variable 3, on
+average. The performance for variable 2 should be similar.
+
+``` r
+# Load additional packages to create toy data
+library(tidyverse)
+
+# Set seed for replication
+set.seed(42)
+
+# Parameters
+N <- 100 # size of the evaluation sample
+H <- 4 # maximum forecast horizons
+V <- 3 # number of variables
+M <- 2 # number of methods
+
+# Make a data frame
+df_toy <- expand.grid(t = 1:N, h = 1:H, v = 1:V)
+
+# Create some artificial scores like, e.g., the squared error, for each time period.
+df_toy <- df_toy %>% 
+  group_by(h, v) %>% 
+  mutate(score1 = abs(rnorm(N, v + h, 1)),
+         score2 = abs(rnorm(N, 2 + h, 1))) %>% 
+  ungroup()
+
+# For convenience, we will transform this into the long format:
+df_toy <- df_toy %>% pivot_longer(starts_with("score"),
+                          names_to = "m", names_prefix = "score",
+                          values_to = "score") %>% 
+  mutate(m = as.integer(m))
+df_toy
+```
+
+### Transforming data into a nested list
+
+In order to apply the main function `conf_bands`, we need to transform
+our data set containing the scores into a nested list using `lapply()`.
+First, we need to iterate over methods (even if $M = 1$), then over time
+periods. The order of the remaining dimensions (horizons and variables
+in this example) does not matter. The last element of the list structure
+has to be a numeric value, that is, the score for method $m$, at time
+$t$, forecast horizon $h$ and for variable $v$.
+
+For later convenience, we will iterate over named vectors because the
+names allow us to convert the results back to a data frame easily:
+However, the names are not necessary for `conf_bands`.
+
+``` r
+
+# Create named vectors for iteration.
+methods <- setNames(1:M, c("m1", "m2")) # forecasting methods
+t_eval <- setNames(1:N, paste0("t", 1:N)) # periods in evaluation sample
+vars <- setNames(1:V, paste0("v", 1:V)) # variables
+horizons <- setNames(1:H, paste0("h", 1:H)) # forecast horizon
+
+# Create nested list of scores
+scores <- 
+  lapply(methods, function(mm) 
+    lapply(t_eval, function(tt) 
+      lapply(horizons, function(hh) 
+        lapply(vars, function(vv){
+          
+          df_toy %>% filter(m == mm, t == tt, h == hh, v == vv) %>% pull(score)
+  
+}))))
+
+# Example: Score for method 2, in period 50, at forecast horizon 2, for variable 3
+scores[[2]][[50]][[2]][[3]]
+#> [1] 3.153694
+```
+
+## The main function: `conf_bands`
+
+The main function `conf_bands` allows to compute four different metrics
+with confidence bands: `"ES"` (expected scores), `"SS"` (skill scores),
+`"RA"` (relative accuracy), and `"D"` (difference in expected scores).
+As an example, we will estimate the skill scores and the expected scores
+themselves for the toy data.
+
+We estimate the skill score of method 1 relative to method 2
+(`m_bench = length(scores) = 2`) and construct Bonferroni confidence
+bands of level $1-\alpha = 0.95$ that are simultaneous with respect to
+the variables and the forecast horizons. The output of `conf_bands` has
+the same structure as the input list except: `length(skill) = M - 1`when
+calculating skill scores and the time dimension has dropped since the
+measure is estimated by averaging over time.
+
+``` r
+# Estimate the skill with confidence bands
+skill <- conf_bands(scores, metric = "SS" , m_bench = length(scores), type = "bonferroni", 
+                    B = 1000, l = 3*floor(length(scores[[1]])^(1/4)), alpha = 0.05)
+
+# Example: Skill score with conf. bands of method 1 (relative to benchmark), at horizon 2, for variable 3
+skill[[1]][[2]][[3]]
+#>      LB_bs         SS      UB_bs 
+#> -0.4177844 -0.2870034 -0.1562224
+```
+
+If the input list is named, `conf_bands`will preserve the names. Then,
+`list_to_df` can be used to transform the results back into a data
+frame. We specify the new column names in the same order as in the
+nested list `skill`: `dimnames = c("m", "v", "h")` or, e.g.,
+`dimnames = c("method", "var", "horizon")`. Optionally, we can also
+choose to get rid of the prefixes in the the columns specified in
+`dims_numeric`.
+
+``` r
+df_skill <- list_to_df(skill, dimnames = c("m", "h", "v"),  dims_numeric = c("h", "v"))
+df_skill
+#> # A tibble: 12 × 6
+#>    m         h     v    LB_bs        SS   UB_bs
+#>    <chr> <dbl> <dbl>    <dbl>     <dbl>   <dbl>
+#>  1 m1        1     1  0.225    0.324     0.422 
+#>  2 m1        1     2 -0.128   -0.0214    0.0855
+#>  3 m1        1     3 -0.478   -0.352    -0.225 
+#>  4 m1        2     1  0.158    0.243     0.328 
+#>  5 m1        2     2  0.00477  0.0917    0.179 
+#>  6 m1        2     3 -0.418   -0.287    -0.156 
+#>  7 m1        3     1  0.176    0.240     0.304 
+#>  8 m1        3     2 -0.0811   0.000890  0.0829
+#>  9 m1        3     3 -0.329   -0.221    -0.113 
+#> 10 m1        4     1  0.0769   0.147     0.216 
+#> 11 m1        4     2 -0.0296   0.0298    0.0893
+#> 12 m1        4     3 -0.224   -0.159    -0.0939
+```
+
+As another example, we estimate the expected scores themselves for both
+methods. Now \`length(expscore) = M = 2’.
+
+``` r
+expscore <- conf_bands(scores, metric = "ES", type = "bonferroni", 
+                    B = 1000, l = 3*floor(length(scores[[1]])^(1/4)), alpha = 0.05)
+
+df_expscore <- list_to_df(expscore, dimnames = c("m", "h", "v"),  dims_numeric = c("h", "v"))
+df_expscore
+#> # A tibble: 24 × 6
+#>    m         h     v LB_bs    ES UB_bs
+#>    <chr> <dbl> <dbl> <dbl> <dbl> <dbl>
+#>  1 m1        1     1  1.80  2.08  2.36
+#>  2 m1        1     2  2.68  2.91  3.15
+#>  3 m1        1     3  3.78  3.99  4.20
+#>  4 m1        2     1  2.77  3.03  3.29
+#>  5 m1        2     2  3.52  3.88  4.24
+#>  6 m1        2     3  4.68  5.00  5.33
+#>  7 m1        3     1  3.58  3.91  4.25
+#>  8 m1        3     2  4.57  4.83  5.09
+#>  9 m1        3     3  5.78  6.06  6.34
+#> 10 m1        4     1  4.76  5.08  5.40
+#> # ℹ 14 more rows
+```
+
+### Plotting results
+
+For convenience, we included some custom functions for plotting the
+results. Often, we are interested in comparing forecasts across several
+forecast horizons, that is, we want to plot them horizontally using the
+function `plot_horizontal`. First, we plot the skill score (`y = "SS`)
+across horizons (`xvar = "h"`). In this case, our bands are not only
+simultaneous with respect to the horizons but also across variables.
+Thus, we additionally facet by `"v"`:
+
+``` r
+plot_horizontal(df_skill, y = "SS", xvar = "h", facet_by = "v", theme = theme_bw())
+```
+
+<img src="man/figures/README-unnamed-chunk-9-1.png" alt="" width="100%" />
+
+As expected, the skill score is positive for variable 1, meaning that
+method 1 outperforms method 2 for the first variable by approximately
+32.4% at $h = 1$. With increasing forecast horizon, the difference
+becomes less relevant but the lower bound of the confidece bands is
+above zero at 7.7%. That is, at all considered forcast horizons, method
+1 has signifcant gains of considerable magnitude as compared to method
+2. For variable 2, both methods perform comparable without the
+trajectory being significanlty different from zero. For variable 3,
+method 2 performs better than method 1, with the gains becoming less
+relevant with increasing forecast horizon.
+
+When plotting the expected scores themselves (`y = "ES"`), we
+additionally use `color_by` for the methods. Moreover, we get rid of the
+vertical line marking zero by using `markzero = FALSE`.
+
+``` r
+plot_horizontal(df_expscore, y = "ES",  xvar = "h", facet_by = "v", color_by = "m", markzero = FALSE, theme = theme_bw())
+```
+
+<img src="man/figures/README-unnamed-chunk-10-1.png" alt="" width="100%" />
+
+## Example 2
+
+In this section, we will use the data we have created in the previous
+section and aggregate scores over forecast horizons. This example is
+similar to the previous section except that we will illustrate plotting
+the results via `plot_vertical`.
+
+### Aggregating scores and estimating expected scores
+
+``` r
+# Aggregate
+df_agg <- df_toy %>% group_by(t, v, m) %>% mutate(score_agg = sum(score)) %>% filter(row_number() == 1) %>% ungroup()
+
+# Make nested list
+scores_agg <- lapply(methods, function(mm) lapply(t_eval, function(tt) lapply(vars, function(vv){
+  
+  df_agg %>% filter(m == mm, t == tt, v == vv) %>% pull(score_agg)
+  
+})))
+
+# Estimate expected scores
+expscore_agg <- conf_bands(scores_agg, metric = "ES", type = "bonferroni", 
+                    B = 1000, l = 3*floor(length(scores[[1]])^(1/4)), alpha = 0.05)
+
+# Make data frame
+df_expscore_agg <- list_to_df(expscore_agg, dimnames = c("m", "v"),  dims_numeric = c("v"))
+```
+
+### Plot results
+
+Now, we plot the expected scores (aggregated over horizons) with
+vertical confidence bands for the three variables (`xvar = "v"`) and the
+two methods (`color_by = "m"`):
+
+``` r
+plot_vertical(df_expscore_agg, xvar = "v", y = "ES", color_by = "m", markzero = FALSE, , theme = theme_bw())
+```
+
+<img src="man/figures/README-unnamed-chunk-12-1.png" alt="" width="100%" />

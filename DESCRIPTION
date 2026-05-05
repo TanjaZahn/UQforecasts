@@ -1,0 +1,18 @@
+Package: UQforecasts
+Type: Package
+Title: Uncertainty Quantification in Forecast Comparisons
+Version: 0.0.1
+Authors@R: c(
+    person("Marc-Oliver", "Pohle", role = "aut"),
+    person("Tanja", "Zahn", email = "tzahn@wiwi.uni-frankfurt.de", role = c("cre", "aut")),
+    person("Sebastian", "Lerch", role = "aut"))
+Description: The package generates simultaneous confidence bands for skill scores, relative expected scores, expected score differences, and expected scores themselves. They allow for valid uncertainty quantification and provide results to joint equal predictive accuracy tests while preventing multiple comparison problems. 
+License: GPL-3
+Encoding: UTF-8
+RoxygenNote: 7.3.3
+Roxygen: list(markdown = TRUE)
+Depends: 
+    R (>= 3.5)
+LazyData: true
+Imports: 
+    tibble
