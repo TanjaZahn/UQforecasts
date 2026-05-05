@@ -117,7 +117,7 @@ scores[[2]][[50]][[2]][[3]]
 
 The main function `conf_bands` allows to compute four different metrics with confidence bands: `"ES"` (expected scores), `"SS"` (skill scores), `"RA"` (relative accuracy), and `"D"` (difference in expected scores). As an example, we will estimate the skill scores and the expected scores themselves for the toy data. 
 
-We estimate the skill score of method 1 relative to method 2 (`m_bench = length(scores) = 2`) and construct Bonferroni confidence bands of level $1-\alpha = 0.95$ that are simultaneous with respect to the variables and the forecast horizons. The output of `conf_bands` has the same structure as the input list except: `length(skill) = M - 1 `when calculating skill scores and the time dimension has dropped since the measure is estimated by averaging over time.
+We estimate the skill score of method 1 relative to method 2 (`m_bench = length(scores) = 2`) and construct Bonferroni confidence bands of level $1-\alpha = 0.95$ that are simultaneous with respect to the variables and the forecast horizons. The output of `conf_bands` has the same structure as the input list except that the time dimension is missing. Further, when calculating skill scores, one method is used as benchmark, which results in `length(skill) = M - 1 `.
 
 ```{r}
 # Estimate the skill with confidence bands
@@ -137,7 +137,7 @@ df_skill
 
 ```
 
-As another example, we estimate the expected scores themselves for both methods. Now `length(expscore) = M = 2'.
+As another example, we estimate the expected scores for both methods.
 ```{r}
 expscore <- conf_bands(scores, metric = "ES", type = "bonferroni", 
                     B = 1000, l = 3*floor(length(scores[[1]])^(1/4)), alpha = 0.05)
