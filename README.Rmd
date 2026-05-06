@@ -17,7 +17,7 @@ knitr::opts_chunk$set(
 
 ## Overview
 
-This package accompanies the paper "Uncertainty Quantification in Forecast Comparisons" by Marc-Oliver Pohle, Tanja Zahn and Sebastian Lerch.
+This package accompanies the paper ["Uncertainty Quantification in Forecast Comparisons"](https://arxiv.org/abs/2605.03997) by Marc-Oliver Pohle, Tanja Zahn and Sebastian Lerch.
 
 The goal of the package is to provide *valid simultaneous inference in forecast comparisons* in a multi-dimensional setup while preventing multi-comparison problems. It can be used to estimate measures such as skill scores, relative accuracy, the expected scores themselves and the difference in expected scores. The latter is the primary object of interest in the popular Diebold-Mariano tests  of equal predictive accuracy. In addition, the package will generate confidence bands of level $1 - \alpha$ that are simultaneous over all dimensions, e.g., over forecasting methods, forecast horizons, variables and/or locations (in the case of meteorological forecasts).
 
